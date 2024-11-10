@@ -1,18 +1,16 @@
 import numpy as np
 import random
 
-# Configurações do SudoKube
-num_faces = 6  # Número de faces do cubo
-grid_size = 9  # Tamanho do grid 9x9 para cada face
+num_faces = 6  
+grid_size = 9  
+MAX_STAGNATION = 2000
 
-# Função para gerar uma população inicial respeitando pistas fixas
 def generate_initial_population(pop_size, initial_puzzle):
     population = []
     for _ in range(pop_size):
         individual = np.copy(initial_puzzle)
         for face in range(num_faces):
             for i in range(grid_size):
-                # Preenche apenas células vazias
                 empty_indices = np.where(individual[face, i, :] == 0)[0]
                 np.random.shuffle(empty_indices)
                 possible_values = np.arange(1, grid_size + 1)
@@ -21,64 +19,119 @@ def generate_initial_population(pop_size, initial_puzzle):
         population.append(individual)
     return population
 
-# Função de fitness aprimorada
 def calculate_fitness(individual):
     fitness = 0
+    
+    # Restrição 1: Unicidade em linhas e colunas para cada face
     for face in range(num_faces):
         for i in range(grid_size):
             # Penaliza duplicatas em linhas e colunas
-            fitness += (grid_size - len(set(individual[face, i, :])))
-            fitness += (grid_size - len(set(individual[face, :, i])))
-        
-        # Verifica duplicatas em cada subgrade 3x3
+            fitness += (grid_size - len(set(individual[face, i, :])))  # Linha
+            fitness += (grid_size - len(set(individual[face, :, i])))  # Coluna
+    
+    # Restrição 2: Unicidade em subgrades 3x3 dentro de cada face
+    """ for face in range(num_faces):
         for row in range(0, grid_size, 3):
             for col in range(0, grid_size, 3):
                 subgrid = individual[face, row:row+3, col:col+3].flatten()
-                fitness += (grid_size - len(set(subgrid)))
+                fitness += (grid_size - len(set(subgrid))) """
     
-    # Adiciona penalidade por inconsistências nas bordas compartilhadas
-    fitness += check_shared_edges(individual)
+    # Restrição 3: Unicidade ao longo do eixo Z
+    """ for i in range(grid_size):       
+        for j in range(grid_size):    
+            z_line = [individual[face, i, j] for face in range(num_faces)]
+            fitness += (grid_size - len(set(z_line)))  # Penaliza duplicatas ao longo do eixo Z """
+    
+    # Restrição 4: Consistência nas bordas compartilhadas entre faces adjacentes
+  #  fitness += check_shared_edges(individual)
     
     return fitness
 
-# Função para verificar as bordas compartilhadas entre as faces
 def check_shared_edges(individual):
     penalty = 0
-    # Adicione a lógica para comparar as bordas de faces adjacentes
-    # Por exemplo, comparar o topo de uma face com a base da outra
-    # Aqui deve ser implementado o código específico para o layout do SudoKube
+    
+    edges = [
+        (0, 'top', 1, 'bottom'),   
+        (0, 'right', 2, 'left'),    
+        (0, 'bottom', 3, 'top'),    
+        (0, 'left', 4, 'right'),    
+        (1, 'right', 2, 'top'),     
+        (1, 'left', 4, 'bottom'),   
+        (3, 'right', 2, 'bottom'),  
+        (3, 'left', 4, 'top'),      
+        (5, 'top', 1, 'bottom'),    
+        (5, 'right', 2, 'left'),    
+        (5, 'bottom', 3, 'top'),    
+        (5, 'left', 4, 'right')     
+    ]
+
+    def get_edge(face, edge):
+        if edge == 'top':
+            return individual[face, 0, :]
+        elif edge == 'bottom':
+            return individual[face, -1, :]
+        elif edge == 'left':
+            return individual[face, :, 0]
+        elif edge == 'right':
+            return individual[face, :, -1]
+    
+    for face_a, edge_a, face_b, edge_b in edges:
+        edge_values_a = get_edge(face_a, edge_a)
+        edge_values_b = get_edge(face_b, edge_b)
+        penalty += np.sum(edge_values_a != edge_values_b)
+    
     return penalty
 
-# Operador de crossover
+# Crossover principal
 def crossover(parent1, parent2):
     child = np.copy(parent1)
     for face in range(num_faces):
         if random.random() > 0.5:
-            child[face] = parent2[face]  # Substitui a face com a do outro pai
+            child[face] = parent2[face]
     return child
 
-# Operador de mutação
+# Crossover com heurística (Seleciona apenas melhor fitness)
+def selective_crossover(parent1, parent2):
+    child = np.copy(parent1)
+    for face in range(num_faces):
+        for i in range(grid_size):
+            if np.random.rand() > 0.5:
+                child[face, i, :] = parent2[face, i, :]
+            else:
+                child[face, :, i] = parent2[face, :, i]
+    return child
+
 def mutate(individual, mutation_rate=0.01):
     for face in range(num_faces):
         if random.random() < mutation_rate:
-            # Troca aleatória em uma linha para mutação
             row = random.randint(0, grid_size - 1)
             idx1, idx2 = random.sample(range(grid_size), 2)
             individual[face, row, idx1], individual[face, row, idx2] = individual[face, row, idx2], individual[face, row, idx1]
     return individual
 
-# Algoritmo genético principal
 def genetic_algorithm(pop_size, max_generations, initial_puzzle):
     population = generate_initial_population(pop_size, initial_puzzle)
     best_fitness_over_time = []
 
+    stagnation = 0
+    last_best_fitness = float('inf')
+
     for generation in range(max_generations):
         population.sort(key=calculate_fitness)
         best_fitness = calculate_fitness(population[0])
+        if best_fitness <= last_best_fitness:
+            stagnation += 1
+        else:
+            stagnation = 0
+
         best_fitness_over_time.append(best_fitness)
         
         print(f"Geração {generation}: Melhor fitness = {best_fitness}")
         
+        if stagnation >= MAX_STAGNATION:
+            print("Não foi possível encontrar melhor solução. Estagnação por mais de 2000 gerações")
+            return population[0]
+
         if best_fitness == 0:
             print(f"Solução encontrada na geração {generation}")
             return population[0]
@@ -94,11 +147,8 @@ def genetic_algorithm(pop_size, max_generations, initial_puzzle):
     print("Nenhuma solução encontrada")
     return None
 
-# Exemplo de input: um SudoKube com pistas fixas
 initial_puzzle = np.zeros((num_faces, grid_size, grid_size), dtype=int)
-# Preencha 'initial_puzzle' com as pistas do problema antes de rodar o algoritmo
 
-# Executa o algoritmo genético
 solution = genetic_algorithm(pop_size=50, max_generations=1000000, initial_puzzle=initial_puzzle)
 if solution is not None:
     print("Solução final:")
