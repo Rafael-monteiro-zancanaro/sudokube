@@ -2,8 +2,8 @@ import numpy as np
 import random
 
 num_faces = 6  
-grid_size = 9  
-MAX_STAGNATION = 2000
+grid_size = 6  
+MAX_STAGNATION = 9000
 
 def generate_initial_population(pop_size, initial_puzzle):
     population = []
@@ -30,57 +30,20 @@ def calculate_fitness(individual):
             fitness += (grid_size - len(set(individual[face, :, i])))  # Coluna
     
     # Restrição 2: Unicidade em subgrades 3x3 dentro de cada face
-    """ for face in range(num_faces):
+    for face in range(num_faces):
         for row in range(0, grid_size, 3):
             for col in range(0, grid_size, 3):
                 subgrid = individual[face, row:row+3, col:col+3].flatten()
-                fitness += (grid_size - len(set(subgrid))) """
+                fitness += (grid_size - len(set(subgrid)))
     
     # Restrição 3: Unicidade ao longo do eixo Z
-    """ for i in range(grid_size):       
+    for i in range(grid_size):       
         for j in range(grid_size):    
             z_line = [individual[face, i, j] for face in range(num_faces)]
-            fitness += (grid_size - len(set(z_line)))  # Penaliza duplicatas ao longo do eixo Z """
-    
-    # Restrição 4: Consistência nas bordas compartilhadas entre faces adjacentes
-  #  fitness += check_shared_edges(individual)
+            fitness += (grid_size - len(set(z_line)))  # Penaliza duplicatas ao longo do eixo Z
     
     return fitness
 
-def check_shared_edges(individual):
-    penalty = 0
-    
-    edges = [
-        (0, 'top', 1, 'bottom'),   
-        (0, 'right', 2, 'left'),    
-        (0, 'bottom', 3, 'top'),    
-        (0, 'left', 4, 'right'),    
-        (1, 'right', 2, 'top'),     
-        (1, 'left', 4, 'bottom'),   
-        (3, 'right', 2, 'bottom'),  
-        (3, 'left', 4, 'top'),      
-        (5, 'top', 1, 'bottom'),    
-        (5, 'right', 2, 'left'),    
-        (5, 'bottom', 3, 'top'),    
-        (5, 'left', 4, 'right')     
-    ]
-
-    def get_edge(face, edge):
-        if edge == 'top':
-            return individual[face, 0, :]
-        elif edge == 'bottom':
-            return individual[face, -1, :]
-        elif edge == 'left':
-            return individual[face, :, 0]
-        elif edge == 'right':
-            return individual[face, :, -1]
-    
-    for face_a, edge_a, face_b, edge_b in edges:
-        edge_values_a = get_edge(face_a, edge_a)
-        edge_values_b = get_edge(face_b, edge_b)
-        penalty += np.sum(edge_values_a != edge_values_b)
-    
-    return penalty
 
 # Crossover principal
 def crossover(parent1, parent2):
